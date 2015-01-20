@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Configuration;
+using System.Linq;
 using System.Net;
 using System.IO;
 
@@ -29,15 +30,18 @@ namespace IpTracker
 
         private static void CreateFiles(IEnumerable<FileInfo> files)
         {
-            foreach (var file in files)
+            foreach (var file in files.Where(file => !File.Exists(file.FullName)))
             {
-                if (!File.Exists(file.FullName))
+                if (file.DirectoryName != null)
                 {
                     if (!Directory.Exists(file.DirectoryName))
                     {
                         Directory.CreateDirectory(file.DirectoryName);
                     }
-                    using (File.Create(file.FullName));
+                }
+
+                using (File.Create(file.FullName))
+                {
                 }
             }
         }
@@ -58,7 +62,12 @@ namespace IpTracker
         {
             File.WriteAllText(currentIpFile, currentIp);
 
-            var newIpLine = DateTime.Now.ToString("yyyy-MM-dd") + "\t" + DateTime.Now.ToString("HH:mm:ss") + "\t" + currentIp + Environment.NewLine;
+            var newIpLine = String.Format("{0}\t{1}\t{2}{3}", 
+                DateTime.Now.ToString("yyyy-MM-dd"), 
+                DateTime.Now.ToString("HH:mm:ss"), 
+                currentIp, 
+                Environment.NewLine);
+
             File.AppendAllText(ipHistoryFile, newIpLine);
         }
     }
