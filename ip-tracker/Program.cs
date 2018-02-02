@@ -7,13 +7,18 @@ using System.IO;
 
 namespace IpTracker
 {
-    class Program
+    internal class Program
     {
-        static void Main()
+        private static void Main()
         {
             var ipLookupServiceUrl = ConfigurationManager.AppSettings["IpLookupServiceUrl"];
             var currentIpFile = new FileInfo(ConfigurationManager.AppSettings["CurrentIpFilePathAndName"]);
             var ipHistoryFile = new FileInfo(ConfigurationManager.AppSettings["IpHistoryFilePathAndName"]);
+            var ignoredIpsStringList = ConfigurationManager.AppSettings["IgnoredIpsCsv"]?.Split(',');
+
+            var ignoredIps = new List<IPAddress>();
+            if (ignoredIpsStringList != null)
+                ignoredIps.AddRange(ignoredIpsStringList.Select(IPAddress.Parse));
 
             CreateFiles(new List<FileInfo> { currentIpFile, ipHistoryFile });
 
@@ -21,6 +26,9 @@ namespace IpTracker
             var lastIp = GetLastRecordedIp(currentIpFile);
 
             if (currentIp.Equals(lastIp))
+                return;
+
+            if (ignoredIps.Contains(currentIp))
                 return;
 
             UpdateIpTextFiles(currentIp, currentIpFile.FullName, ipHistoryFile.FullName);
@@ -33,14 +41,10 @@ namespace IpTracker
                 if (file.DirectoryName != null)
                 {
                     if (!Directory.Exists(file.DirectoryName))
-                    {
                         Directory.CreateDirectory(file.DirectoryName);
-                    }
                 }
 
-                using (File.Create(file.FullName))
-                {
-                }
+                using (File.Create(file.FullName)) { }
             }
         }
 
@@ -54,35 +58,22 @@ namespace IpTracker
                 var apiResult = client.DownloadString(url);
                 
                 if (!IPAddress.TryParse(apiResult, out ip))
-                {
-                    throw new Exception(String.Format("Return value was not a valid IP address. Value returned was:{0}{1}", Environment.NewLine, apiResult));
-                }
+                    throw new Exception($"Return value was not a valid IP address. Value returned was:{Environment.NewLine}{apiResult}");
             }
 
             return ip;
         }
 
-        private static IPAddress GetLastRecordedIp(FileInfo filePath)
+        private static IPAddress GetLastRecordedIp(FileSystemInfo filePath)
         {
-            IPAddress ip;
-
-            var textFileContents = File.ReadAllText(filePath.FullName);
-
-            if (!IPAddress.TryParse(textFileContents, out ip))
-                ip = IPAddress.Parse("127.0.0.1");
-
-            return ip;
+            return IPAddress.Parse(File.ReadAllText(filePath.FullName));
         }
 
         private static void UpdateIpTextFiles(IPAddress currentIp, string currentIpFile, string ipHistoryFile)
         {
             File.WriteAllText(currentIpFile, currentIp.ToString());
 
-            var newIpLine = String.Format("{0}\t{1}\t{2}{3}", 
-                                                            DateTime.Now.ToString("yyyy-MM-dd"), 
-                                                            DateTime.Now.ToString("HH:mm:ss"), 
-                                                            currentIp, 
-                                                            Environment.NewLine);
+            var newIpLine = $"{DateTime.Now:yyyy-MM-dd}\t{DateTime.Now:HH:mm:ss}\t{currentIp}{Environment.NewLine}";
 
             File.AppendAllText(ipHistoryFile, newIpLine);
         }
